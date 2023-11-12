@@ -1,7 +1,3 @@
-proc not {input_value} {
-    string map {0 1 1 0} $input_value
-}
-
 proc is_empty {str} {
     return [string equal $str ""]
 }
@@ -25,20 +21,6 @@ proc or {arg1 arg2} {
 proc xor {arg1 arg2} {
     return [binary_function {{0 1} {1 0}} $arg1 $arg2]
 }
-
-proc >> {inputval} {
-    set result [string range $inputval 0 end-1]
-    if [is_empty $result] {set result 0}
-    return $result
-}
-
-proc << {inputval} {
-    if {$inputval != 0} {
-	return ${inputval}0
-    }
-    return 0
-}
-
 
 proc get_last_num {input_val} {
     if [is_empty $input_val] {
@@ -157,7 +139,7 @@ proc minus {arg1 arg2} {
     return [trim_leading_zero $result]
 }
 
-proc mul-naive {arg1 arg2} {
+proc mul_naive {arg1 arg2} {
     set result "0"
     while {![is_empty $arg2]} {
 	if {[get_last_num $arg2] == 1} {
@@ -168,35 +150,6 @@ proc mul-naive {arg1 arg2} {
     }
     return [trim_leading_zero $result]
 }
-
-proc mul-karacuba {arg1 arg2 length_threshold} {
-    set arg1_length [string length $arg1]
-    set arg2_length [string length $arg2]
-    set min_length [::tcl::mathfunc::min $arg1_length $arg2_length]
-    if {$min_length <= $length_threshold} {
-	return [mul-naive $arg1 $arg2]
-    }
-    set half [::tcl::mathop::/ $min_length 2]
-    # a*x + b
-    # c*x + d
-    set arg_a [string range $arg1 0 end-$half]
-    set arg_b [string range $arg1 end-[::tcl::mathop::- $half 1] end]
-    set arg_c [string range $arg2 0 end-$half]
-    set arg_d [string range $arg2 end-[::tcl::mathop::- $half 1] end]
-
-    set amc [mul-karacuba $arg_a $arg_c $length_threshold]
-    set apb [add $arg_a $arg_b]
-    set cpd [add $arg_c $arg_d]
-    set bmd [mul-karacuba $arg_b $arg_d $length_threshold]
-    
-    set sp [mul-karacuba $apb $cpd $length_threshold]
-    
-    set mid [minus [minus $sp $amc] $bmd]
-    
-    return [add [add $amc[string repeat 0 [::tcl::mathop::* $half 2]] $mid[string repeat 0 $half]] $bmd]
-}
-
-# Max: 1606938044258990275541962092341162602522202993782792835301375
 
 proc bin2decimal {arg} {
     set result 0
@@ -210,14 +163,6 @@ proc bin2decimal {arg} {
     return $result
 }
 
-set input_max_val 1606938044258990275541962092341162602522202993782792835301375
-#set input_max_val 20
-
-proc genval {} {
-    upvar #0 input_max_val inner_max
-    return [::tcl::mathfunc::round [::tcl::mathop::* [::tcl::mathfunc::rand] $inner_max]]
-}
-
 proc dec2bin i {
     #returns a string, e.g. dec2bin 10 => 1010 
     set res {} 
@@ -227,32 +172,6 @@ proc dec2bin i {
     }
     if {$res == {}} {set res 0}
     return $res
-}
-
-proc test_mul_naive {tests_number} {
-    for {set i 0} {$i < $tests_number} {incr i} {
-	set a [genval]
-	set b [genval]
-	set result [expr {$a * $b}]
-	if {[mul-naive [dec2bin $a] [dec2bin $b]] != [dec2bin $result]} {
-	    error "Error! $a * $b != $result"
-	}
-	puts "Test $i --- passed."
-    }
-    return "All tests passed!"
-}
-
-proc test_mul_karacuba {tests_number} {
-    for {set i 0} {$i < $tests_number} {incr i} {
-	set a [genval]
-	set b [genval]
-	set result [expr {$a * $b}]
-	if {[mul-karacuba [dec2bin $a] [dec2bin $b] 20] != [dec2bin $result]} {
-	    error "Error! $a * $b != $result"
-	}
-	puts "Test $i --- passed."
-    }
-    return "All tests passed!"
 }
 
 proc div_bool {numerator denumerator} {
@@ -279,50 +198,39 @@ proc div_bool {numerator denumerator} {
     return [list [trim_leading_zero $quotient] $remainder]
 }
 
-proc test_uni {tests_number condition} {
-    for {set i 0} {$i < $tests_number} {incr i} {
-	set a [genval]
-	set b [genval]
-	if [eval $condition] {
-	    puts "Test $i --- passed."
-	} else {
-	    error "Error! $a, $b"
-	}
+proc get-values-list-stdin {} {
+    gets stdin some_string
+    return [regsub -all {\s+} \
+		[string trim $some_string] " "]
+}
+
+variable values_list {}
+
+proc get-value {} {
+    upvar #0 values_list val_list
+    while {[llength $val_list] == 0} {
+	set val_list [get-values-list-stdin]
     }
-    puts "All tests passed!"
+    set list_head_element [lindex $val_list 0]
+    set val_list [lreplace $val_list 0 0]
+    return $list_head_element
 }
 
-proc test_add {tests_number} {
-    test_uni $tests_number {expr {[dec2bin [expr {$a + $b}]] == \
-				      [add [dec2bin $a] [dec2bin $b]]}}
-}
-
-proc test_is_greater {tests_number} {
-    test_uni $tests_number {expr {$a > $b == [is_greater [dec2bin $a] [dec2bin $b]]}}
-}
-
-proc test_div_bool {tests_number} {
-    test_uni $tests_number {expr {[div_bool [dec2bin $a] [dec2bin $b]] ==
-				  [apply {{x y} {list [dec2bin [expr {$x / $y}]] \
-						     [dec2bin [expr {$x % $y}]]}} \
-				   $a $b]}}}
-
-proc enlarge {input_a input_b} {
-    set addition 2
-    while {$addition <= $input_b} {
-	set addition [expr {$addition * 2}]
+proc main {} {
+    set tests_quantity [get-value]
+    # array set operations { 0 is_greater 1 add 10 minus 11 mul_naive 100 div_bool }
+    array set operations {
+	0 is_greater
+	1 add
+	10 minus
+	11 mul_naive
+	100 div_bool
     }
-    return [expr {$addition + $input_a}]
-}
-
-proc dec_minus {input_a input_b} {
-    if {$input_a < $input_b} {
-	set input_a [enlarge $input_a $input_b]
+    while {$tests_quantity != 0} {
+	set operation [get-value]
+	puts "[$operations($operation) [get-value] [get-value]]"
+	set tests_quantity [minus $tests_quantity 1]
     }
-    return [expr {$input_a - $input_b}]
 }
 
-proc test_minus {tests_number} {
-    test_uni $tests_number {expr {[dec2bin [dec_minus $a $b]] == \
-				      [minus [dec2bin $a] [dec2bin $b]]}}
-}
+main
